@@ -19,6 +19,18 @@ Node 22.18 or later (this machine: Node 24.22.1). Standard library only, no inst
 writes `out/board.json`, `out/data.js`, `out/dashboard/`, `out/screenshots/` and `out/dossier.json`.
 Run it twice: the two runs write the same bytes.
 
+## Using the board
+
+The dashboard is a static page with no network calls; everything it shows is
+in `data.js` beside it. Search matches name, slug, category and chain — press
+`/` anywhere on the page to jump to the search box. The verdict chips
+(Farm / Thin / Skip, with the board total in each label) are the fast path to
+the verdict filter; clicking the active chip again clears it, and the Verdict
+dropdown does the same thing. **Export CSV** downloads exactly the rows the
+current filters show, in the table's sort order, with the implied-value band
+included, so the file and the page never disagree. **Clear filters** resets
+search, category, chain and verdict to the full 178-row board.
+
 ## The model (radar-2)
 
 The snapshot prices itself. The multiples are fitted at run time from the protocols in the same
