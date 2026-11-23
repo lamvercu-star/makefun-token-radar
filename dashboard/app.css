@@ -73,6 +73,17 @@ a { color: var(--accent); }
 .tabs { display: flex; gap: var(--step-1); padding: 3px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); }
 .tabs button { min-height: 30px; padding: 0 var(--step-3); border: 0; border-radius: 6px; background: transparent; color: var(--muted); }
 .tabs button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+/* Verdict chips: same toggle idea as the tabs, but one button per verdict with
+   its board total in the label. The pressed chip is filled with the ink, the
+   rest stay quiet, so the active filter reads at a glance. */
+.chips { display: flex; gap: var(--step-1); padding: 3px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); }
+.chip { min-height: 30px; padding: 0 var(--step-3); border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 13px; white-space: nowrap; }
+.chip:hover { color: var(--ink); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+/* The Export CSV / Clear filters pair sits beside the chips, not under them,
+   so the filtered board's actions stay next to the filters that shaped it. */
+.actions { display: flex; gap: var(--step-1); padding: 3px; }
+.actions .button { min-height: 30px; }
 .count { margin-left: auto; color: var(--muted); font-size: 13px; align-self: center; }
 
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); overflow: hidden; }

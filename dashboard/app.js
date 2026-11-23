@@ -176,6 +176,78 @@
     });
   }
 
+  // How many rows of each verdict a list holds. The chips in controls() show
+  // the board totals, so a reader can see at a glance that Farm is rare (7 of
+  // 178) before filtering; the count next to the controls shows the filtered total.
+  function verdictCounts(list) {
+    var counts = { Farm: 0, Thin: 0, Skip: 0 };
+    list.forEach(function (r) {
+      if (counts[r.verdict] === undefined) counts[r.verdict] = 0;
+      counts[r.verdict] += 1;
+    });
+    return counts;
+  }
+
+  // One CSV field: quote it only when it needs quoting, and double any quote
+  // inside it, so a protocol name with a comma or a quote survives the export.
+  function csvField(value) {
+    var s = value === null || value === undefined ? '' : String(value);
+    if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+
+  // The filtered board as CSV: the same columns the table shows, plus the
+  // implied-value band, so the exported file can be checked against the page
+  // without re-running the model. Ranks stay the board's ranks, not 1..n of
+  // the filtered list, so a row keeps its identity when it is exported alone.
+  function rowsToCsv(list) {
+    var header = ['rank', 'protocol', 'slug', 'category', 'chains', 'tvl_usd', 'change_7d_pct', 'age_days', 'implied_low_usd', 'implied_value_usd', 'implied_high_usd', 'verdict'];
+    var lines = [header.join(',')];
+    list.forEach(function (r) {
+      lines.push([
+        csvField(r.rank),
+        csvField(r.name),
+        csvField(r.slug),
+        csvField(r.category || 'Other'),
+        csvField((r.chains || []).join('; ')),
+        csvField(r.tvl_usd),
+        csvField(r.change_7d),
+        csvField(r.age_days),
+        csvField(r.implied_low_usd),
+        csvField(r.implied_value_usd),
+        csvField(r.implied_high_usd),
+        csvField(r.verdict),
+      ].join(','));
+    });
+    return lines.join('\n') + '\n';
+  }
+
+  // Download the filtered board as token-radar.csv. A Blob keeps this fully
+  // offline, like the rest of the page: no fetch, no server, no new dependency.
+  function downloadCsv(list) {
+    var blob = new Blob([rowsToCsv(list)], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'token-radar.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // Reset every filter to the full board and re-render. Used by the Clear
+  // filters button in the controls and by the empty-state panel, so both
+  // paths do exactly the same thing instead of drifting apart.
+  function clearFilters() {
+    state.q = '';
+    state.category = 'all';
+    state.chain = 'all';
+    state.verdict = 'all';
+    writeHash();
+    render();
+  }
+
   function verdictClass(v) { return v === 'Farm' ? 'farm' : v === 'Thin' ? 'thin' : 'skip'; }
 
   function header() {
@@ -222,12 +294,32 @@
     search.addEventListener('input', function () { state.q = search.value; writeHash(); render(); });
     var pre = el('button', { type: 'button', 'aria-pressed': state.tab === 'pre-token' ? 'true' : 'false', text: 'Pre-token', onclick: function () { state.tab = 'pre-token'; render(); } });
     var live = el('button', { type: 'button', 'aria-pressed': state.tab === 'live' ? 'true' : 'false', text: 'Live token', onclick: function () { state.tab = 'live'; render(); } });
+    // Verdict chips: the fast path to the same filter the Verdict dropdown
+    // offers. Clicking the active chip again clears it back to all verdicts,
+    // so the chips are a toggle, not a one-way trap. The count in each chip
+    // is the board total for that verdict, not the filtered total.
+    var totals = verdictCounts(DATA.rows);
+    var chips = ['Farm', 'Thin', 'Skip'].map(function (v) {
+      return el('button', {
+        type: 'button',
+        class: 'chip ' + verdictClass(v),
+        'aria-pressed': state.verdict === v ? 'true' : 'false',
+        text: v + ' (' + totals[v] + ')',
+        onclick: function () { state.verdict = state.verdict === v ? 'all' : v; writeHash(); render(); },
+      });
+    });
+    // Export downloads exactly the rows the current filters show, in the
+    // table's sort order, so the file and the page never disagree.
+    var exportBtn = el('button', { type: 'button', class: 'button', text: 'Export CSV', onclick: function () { downloadCsv(sortedRows(rows())); } });
+    var clearBtn = el('button', { type: 'button', class: 'button', text: 'Clear filters', onclick: function () { clearFilters(); } });
     return el('div', { class: 'controls' },
       el('div', { class: 'field' }, el('label', { for: 'q', text: 'Search' }), search),
       selectField('category', 'Category', [['all', 'All categories']].concat(categories.map(function (c) { return [c, c]; })), state.category, function (v) { state.category = v; }),
       selectField('chain', 'Chain', [['all', 'All chains']].concat(chains.map(function (c) { return [c, c]; })), state.chain, function (v) { state.chain = v; }),
       selectField('verdict', 'Verdict', [['all', 'All verdicts'], ['Farm', 'Farm'], ['Thin', 'Thin'], ['Skip', 'Skip']], state.verdict, function (v) { state.verdict = v; }),
       el('div', { class: 'field' }, el('span', { class: 'sub', text: 'Token status' }), el('div', { class: 'tabs' }, pre, live)),
+      el('div', { class: 'field' }, el('span', { class: 'sub', text: 'Quick verdict filter' }), el('div', { class: 'chips' }, chips)),
+      el('div', { class: 'field' }, el('span', { class: 'sub', text: 'Filtered board' }), el('div', { class: 'actions' }, exportBtn, clearBtn)),
       el('span', { class: 'count', text: state.tab === 'pre-token' ? rows().length + ' rows shown' : DATA.live.length + ' live-token protocols' })
     );
   }
@@ -247,7 +339,7 @@
       return el('div', { class: 'panel' }, el('div', { class: 'empty' },
         el('h2', { text: 'No protocol matches that filter' }),
         el('p', { text: 'Clear the search or pick another category to see the board again.' }),
-        el('button', { class: 'button primary', type: 'button', text: 'Clear filters', onclick: function () { state.q = ''; state.category = 'all'; state.chain = 'all'; state.verdict = 'all'; writeHash(); render(); } })
+        el('button', { class: 'button primary', type: 'button', text: 'Clear filters', onclick: function () { clearFilters(); } })
       ));
     }
     var max = list[0].implied_value_usd || 1;
@@ -414,5 +506,16 @@
   render();
   window.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && dialog.open) dialog.close();
+    // Pressing / jumps to the search box, the way it does on most boards.
+    // It only fires when the user is not already typing in a field, so it
+    // never steals a slash the user meant to type into the search itself.
+    if (e.key === '/' && !dialog.open) {
+      var target = e.target;
+      var tag = target && target.tagName ? target.tagName.toLowerCase() : '';
+      if (tag === 'input' || tag === 'select' || tag === 'textarea' || (target && target.isContentEditable)) return;
+      e.preventDefault();
+      var searchBox = document.getElementById('q');
+      if (searchBox) searchBox.focus();
+    }
   });
 })();
